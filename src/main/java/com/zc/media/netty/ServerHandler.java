@@ -14,13 +14,15 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.util.CharsetUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  **/
 @Component
 public class ServerHandler extends SimpleChannelInboundHandler<Object> {
-
+    private static final Logger logger = LoggerFactory.getLogger(ServerHandler.class);
     public static ConcurrentHashMap<String, ThreadRtsp> listThread = new ConcurrentHashMap<>();//存放解码线程
 
     private WebSocketServerHandshaker handshaker;
@@ -62,25 +64,35 @@ public class ServerHandler extends SimpleChannelInboundHandler<Object> {
             ResponseInfo responseInfo = null;
             if (!req.decoderResult().isSuccess() || (!"websocket".equals(req.headers().get("Upgrade")))) {
                 // http请求
-                QueryStringDecoder decoder = new QueryStringDecoder(uri);
-                Map<String, List<String>> parameters = decoder.parameters();
-                List<String> stream = parameters.get("stream");
-                if(stream != null && stream.size() == 1) {//判断是否带有流地址
-                    System.out.println(stream.get(0));
+//                QueryStringDecoder decoder = new QueryStringDecoder(uri);
+//                Map<String, List<String>> parameters = decoder.parameters();
+//                List<String> stream = parameters.get("stream");
+//                if(stream != null && stream.size() == 1) {//判断是否带有流地址
+//                    responseInfo = new ResponseInfo();
+//                    responseInfo.setResponse(ctx);
+//                    responseInfo.setIsHttp(ResponseInfo.HTTP);
+//                    responseInfo.setUrl(stream.get(0));
+//                    responseInfo.setSendHeader(false);
+//
+//                    streamUrl = stream.get(0);
+////                    sendFlvReqHeader(ctx);
+////                    AsyncServiceImpl.addRes(responseInfo);
+////                    serverHandler.service.openTest(stream.get(0),ctx);
+//                } else {
+//                    sendError(ctx, HttpResponseStatus.BAD_REQUEST);
+//                }
+                //http请求有特殊符号，流地址不完整
+                int i = uri.indexOf("stream=");
+                if(i > 0) {
+                    streamUrl = uri.substring(i + 7);
                     responseInfo = new ResponseInfo();
                     responseInfo.setResponse(ctx);
                     responseInfo.setIsHttp(ResponseInfo.HTTP);
-                    responseInfo.setUrl(stream.get(0));
+                    responseInfo.setUrl(streamUrl);
                     responseInfo.setSendHeader(false);
-
-                    streamUrl = stream.get(0);
-                    sendFlvReqHeader(ctx);
-//                    AsyncServiceImpl.addRes(responseInfo);
-//                    serverHandler.service.openTest(stream.get(0),ctx);
                 } else {
                     sendError(ctx, HttpResponseStatus.BAD_REQUEST);
                 }
-
             } else {
                 int startIndex = uri.indexOf("stream=");
                 if(startIndex <= 0) {
@@ -120,10 +132,12 @@ public class ServerHandler extends SimpleChannelInboundHandler<Object> {
                 if(thread == null) {
                     thread = new ThreadRtsp(streamUrl);
                     thread.add(responseInfo);
-                    thread.start();
+//                    thread.start();
                 } else {
                     thread.add(responseInfo);
                 }
+                thread.setName(streamUrl);
+                logger.info("请求视频流" + streamUrl);
                 listThread.put(streamUrl,thread);
 //                serverHandler.redisUtil.set(responseInfo.getResponse().channel().id().toString(), streamUrl,100);
             } else {//断开无效连接
@@ -188,8 +202,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
         super.channelUnregistered(ctx);
-        System.out.println("client close" + ctx.channel().remoteAddress().toString());
-
+        logger.warn("client close" + ctx.channel().remoteAddress().toString());
         //请求退出
 //        AsyncServiceImpl.listRes.remove(ctx.channel().id());
     }

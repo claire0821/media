@@ -11,7 +11,7 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
  * @author: Claire
  * @create: 2021-07-05 11:45
  **/
-//@Configuration
+@Configuration
 public class RedisListenerConfig {
     @Bean
     RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory) {

@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.lang.reflect.Field;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -69,13 +70,15 @@ public class RtspConverter extends Thread{
     private byte[] outData;
     private long updateTime;
 
-    private RtspState rtspState;
+    volatile private RtspState rtspState;
 
     //开始拉流时间
     private DateTime startTime;
 
     public boolean capture;
 
+    public int videoStream;
+    public int audioStream;
     public RtspState getRtspState() {
         return rtspState;
     }
@@ -131,7 +134,7 @@ public class RtspConverter extends Thread{
     private boolean createGrabber() {
         boolean res = false;
         try {
-            grabber = new FFmpegFrameGrabber(url);
+            grabber = FFmpegFrameGrabber.createDefault(url);// new FFmpegFrameGrabber(url);
 
             if("rtsp".equals(url.substring(0,4))) {
                 //设置打开协议tcp / udp udp_multicast使用UDP多播作为较低的传输协议 http使用HTTP隧道作为较低的传输协议
@@ -145,17 +148,17 @@ public class RtspConverter extends Thread{
                 //grabber.setOption("initial_pause", "0");
                 //允许的媒体类型 vide audio data
 //                grabber.setOption("allowed_media_types", "video");
-                grabber.setOption("stimeout", "15000000");
+                grabber.setOption("stimeout", "5000000");//5秒
             }
             // 设置缓存大小，提高画质、减少卡顿花屏
             grabber.setOption("buffer_size", "1024000");
             //设置视频比例
             //grabber.setAspectRatio(1.7777);
-            grabber.setPixelFormat(AV_PIX_FMT_YUV420P);
-            grabber.setOption("threads", "1");
+//            grabber.setPixelFormat(AV_PIX_FMT_YUV420P);
+//            grabber.setOption("threads", "1");
 
             grabber.start();
-            grabber.flush();
+            //grabber.flush();
             res = true;
         } catch (FrameGrabber.Exception e) {
             e.printStackTrace();
@@ -187,6 +190,11 @@ public class RtspConverter extends Thread{
             recorder.setGopSize(50);
             //百度翻译的比特率，默认400000，但是我400000贼模糊，调成800000比较合适
             recorder.setVideoBitrate(800000);
+
+            // 降低编码延时
+            //recorder.setVideoOption("tune", "zerolatency");
+            // 提升编码速度
+            //recorder.setVideoOption("preset", "ultrafast");
             /*
             if(false) {
                 recorder.setInterleaved(false);
@@ -225,10 +233,18 @@ public class RtspConverter extends Thread{
                 recorder.setVideoBitrate(grabber.getVideoBitrate());//码率
                 recorder.setVideoCodec(grabber.getVideoCodec());
             } */
+//            recorder.start(grabber.getFormatContext());
+//            grabber.flush();
 
             recorder.start(grabber.getFormatContext());
-//            recorder.start();
-//            grabber.flush();
+            //recorder.start();
+            //AVFormatContext的max_interleave_delta参数默认为10秒，在ff_interleave_packet_per_dts方法中会检查所有流是否都有数据，如果没有数据会默认等待10秒，因此造成推流延迟。
+            // 解决音视频同步导致的延时问题
+            Field field = recorder.getClass().getDeclaredField("oc");
+            field.setAccessible(true);
+            AVFormatContext oc = (AVFormatContext) field.get(recorder);
+            oc.max_interleave_delta(100);
+
             //设置头信息
             this.headers = stream.toByteArray();
             stream.reset();
@@ -404,6 +420,9 @@ public class RtspConverter extends Thread{
             logger.error("open stream failed " + this.url);
             return false;
         }
+
+        this.videoStream = this.grabber.getVideoStream();
+        this.audioStream = this.grabber.getAudioStream();
 
         if(!createRecorder()) {
             this.rtspState = RtspState.ERROR;

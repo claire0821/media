@@ -3,7 +3,8 @@ package com.zc.media.util;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,16 +16,6 @@ import java.util.concurrent.TimeUnit;
  * @author: Claire
  * @create: 2021-07-01 17:53
  **/
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * redisTemplate封装
@@ -87,13 +78,14 @@ public class RedisUtil {
      * @param key 可以传一个值 或多个
      */
     @SuppressWarnings("unchecked")
-    public void del(String ... key){
-        if(key!=null&&key.length>0){
-            if(key.length==1){
-                redisTemplate.delete(key[0]);
-            }else{
-//                redisTemplate.delete(CollectionUtils.arrayToList(key));
-            }
+    public boolean del(String ... key){
+        if(key == null || key.length <= 0)return false;
+        try{
+            redisTemplate.delete(Arrays.asList(key));
+            return true;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return false;
         }
     }
 
@@ -186,7 +178,7 @@ public class RedisUtil {
      * @param key 键
      * @return 对应的多个键值
      */
-    public Map<Object,Object> hmget(String key){
+    public Map<Object, Object> hmget(String key){
         return redisTemplate.opsForHash().entries(key);
     }
 
@@ -196,7 +188,7 @@ public class RedisUtil {
      * @param map 对应多个键值
      * @return true 成功 false 失败
      */
-    public boolean hmset(String key, Map<String,Object> map){
+    public boolean hmset(String key, Map<Object,Object> map){
         try {
             redisTemplate.opsForHash().putAll(key, map);
             return true;
@@ -552,4 +544,16 @@ public class RedisUtil {
         }
     }
 
+
+    //================================================================
+    //获取所有key
+    public Set<String> getKeys(String pattern) {
+        try{
+            Set<String> keys = redisTemplate.keys(pattern);
+            return keys;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }

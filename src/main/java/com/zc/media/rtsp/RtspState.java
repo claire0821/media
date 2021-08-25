@@ -7,5 +7,5 @@ package com.zc.media.rtsp;
  * @create: 2021-06-30 15:29
  **/
 public enum RtspState {
-    INITIAL, OPEN, CLOSE, ERROR, RUN
+    INITIAL, OPEN, CLOSE, ERROR, RUN, CLEAR
 }
